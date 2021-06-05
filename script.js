@@ -1,206 +1,123 @@
-let videoElem = document.querySelector("video"); 
-let recordBtn = document.querySelector(".record");
-let captureImgBtn = document.querySelector(".click-image")
-let filterArr = document.querySelectorAll(".filter");
-let filterOverlay = document.querySelector(".filter_overlay");
-let timings = document.querySelector(".timing");
-let plusBtn = document.querySelector(".plus");
-let minusBtn = document.querySelector(".minus");
-let isRecording = false;
-let filterColor = "";
-let counter = 0;
-let clearObj;
-let scaleLevel = 1;
-let db;
+let constraints = { video: true, audio: true };
 
-// user  requirement send 
-let constraint = {
-    audio: true, video: true
-}
-// represent future recording
-let recording = [];
-let mediarecordingObjectForCurrStream;
-// promise 
-let usermediaPromise = navigator
-    .mediaDevices.getUserMedia(constraint);
-// /stream coming from required
-usermediaPromise.
-    then(function (stream) {
-        // UI stream 
-        videoElem.srcObject = stream;
-        // browser
-        mediarecordingObjectForCurrStream = new MediaRecorder(stream);
-        // camera recording add -> recording array
-        mediarecordingObjectForCurrStream.ondataavailable = function (e) {
+let videoPlayer = document.querySelector("video");
+let vidRecordBtn = document.querySelector("#record-video");
 
-            recording.push(e.data);
-        }
-        // download
-        mediarecordingObjectForCurrStream.addEventListener("stop", function () {
-            // recording -> url convert 
-            // type -> MIME type (extension)
-            const blob = new Blob(recording, { type: 'video/mp4' });
-            // you need to save this blob into indexDB
-            // video.srcObject=blob:
-            const url = window.URL.createObjectURL(blob);
-            let a = document.createElement("a");
-            a.download = "file.mp4";
-            a.href = url;
-            a.click();
-            recording = [];
-            let indexDbObj = indexedDB.open("notes",2);
-            indexDbObj.addEventListener("success", function (e) {
-                //    open
-                db = indexDbObj.result;
-                // alert("success");
-            })
-            indexDbObj.addEventListener("error", function (e) {
-                console.log(e);
-                alert("error");
-            })
-            indexDbObj.addEventListener("upgradeneeded", function (e) {
-                // first create 
-                //  
-                // alert("upgradeCalled");
-                db = indexDbObj.result;
-                // table define
-                db.createObjectStore("abc", {
-                    keyPath: "id"
-                })
-                
-            })
-            if (db) {
-                //   transaction -> is only 
-                // given abc and you can only read and write 
-                let txAccess = db.transaction("abc", "readwrite");
-                let abcStore = txAccess.objectStore("abc");
-                let abcEntry = {
-                    name : "video",
-                    id: url  
-                }
-                abcStore.add(abcEntry);
-            }
-        })
+let mediaRecorder;
+let chunks = [];
+let recordState = false;
 
-    }).catch(function (err) {
-        console.log(err)
-        alert("please allow both microphone and camera");
+let filter = "";
+
+let maxZoom = 3;
+let minZoom = 1;
+let currZoom = 1;
+
+let zoomInBtn = document.getElementById("in");
+let zoomOutBtn = document.getElementById("out");
+
+zoomInBtn.addEventListener("click", function () {
+  let vidScale = Number(
+    videoPlayer.style.transform.split("(")[1].split(")")[0]
+  );
+  if (vidScale < 3) {
+    currZoom = vidScale + 0.1;
+    videoPlayer.style.transform = `scale(${currZoom})`;
+  }
 });
-recordBtn.addEventListener("click", function () {
-    if (mediarecordingObjectForCurrStream == undefined) {
-        alert("First select the devices");
-        return;
-    }
-    if (isRecording == false) {
-        mediarecordingObjectForCurrStream.start();
-        // recordBtn.innerText = "Recording....";
-        recordBtn.classList.add("record-animation");
-        startTimer();
-    }
-    else {
-        stopTimer();
-        mediarecordingObjectForCurrStream.stop();
-        // recordBtn.innerText = "Record";
-        recordBtn.classList.remove("record-animation");
-    }
-    isRecording = !isRecording
-})
-captureImgBtn.addEventListener("click", function () {
-    // canvas create 
-    let canvas = document.createElement("canvas");
-    canvas.height = videoElem.videoHeight;
-    canvas.width = videoElem.videoWidth;
-    let tool = canvas.getContext("2d");
-    // scaling
-    // top left corner
-    tool.scale(scaleLevel, scaleLevel);
-    const x = (tool.canvas.width / scaleLevel - videoElem.videoWidth) / 2;
-    const y = (tool.canvas.height / scaleLevel - videoElem.videoHeight) / 2;
-    // console.log(x, y);
-    tool.drawImage(videoElem, x, y);
-    if (filterColor) {
-        tool.fillStyle = filterColor;
-        tool.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    captureImgBtn.classList.toggle("click-animation");
-    let url = canvas.toDataURL();
-    // db put 
-    let indexDbObj = indexedDB.open("notes",2);
-    indexDbObj.addEventListener("success", function (e) {
-        //    open
-        db = indexDbObj.result;
-        // alert("success");
-    })
-    indexDbObj.addEventListener("error", function (e) {
-        console.log(e);
-        alert("error");
-    })
-    indexDbObj.addEventListener("upgradeneeded", function (e) {
-        // first create 
-        //  
-        // alert("upgradeCalled");
-        db = indexDbObj.result;
-        // table define
-        db.createObjectStore("abc", {
-            keyPath: "id"
-        })
-        
-    })
-    if (db) {
-        //   transaction -> is only 
-        // given abc and you can only read and write 
-        let txAccess = db.transaction("abc", "readwrite");
-        let abcStore = txAccess.objectStore("abc");
-        let abcEntry = {
-            nmae: "image",
-            id: url
-        }
-        abcStore.add(abcEntry);
-    }    
-    let a = document.createElement("a");
-    a.download = "file.png";
-    a.href = url;
-    a.click();
-    a.remove();
-    // videoELement
-})
-// filter Array
-for (let i = 0; i < filterArr.length; i++) {
-    filterArr[i].addEventListener("click", function () {
-        filterColor = filterArr[i].style.backgroundColor;
-        filterOverlay.style.backgroundColor = filterColor;
-    })
-}
-function startTimer() {
-    timings.style.display = "block";
-    function fn() {
-        // hours
-        let hours = Number.parseInt(counter / 3600);
-        let RemSeconds = counter % 3600;
-        let mins = Number.parseInt(RemSeconds / 60);
-        let seconds = RemSeconds % 60;
-        hours = hours < 10 ? `0${hours}` : hours;
-        mins = mins < 10 ? `0${mins}` : `${mins}`;
-        seconds = seconds < 10 ? `0${seconds}` : `${seconds}`;
-        timings.innerText = `${hours}:${mins}:${seconds}`
-        counter++;
-    }
-    clearObj = setInterval(fn, 1000);
-}
-function stopTimer() {
-    timings.style.display = "none";
-    clearInterval(clearObj);
+zoomOutBtn.addEventListener("click", function () {
+  let vidScale = Number(
+    videoPlayer.style.transform.split("(")[1].split(")")[0]
+  );
+  if (vidScale > 1) {
+    currZoom = vidScale - 0.1;
+    videoPlayer.style.transform = `scale(${currZoom})`;
+  }
+});
+
+let allFilters = document.querySelectorAll(".filter");
+
+for (let i = 0; i < allFilters.length; i++) {
+  allFilters[i].addEventListener("click", function (e) {
+    filter = e.currentTarget.style.backgroundColor;
+    removeFilter();
+    addFilterToScreen(filter);
+  });
 }
 
-minusBtn.addEventListener("click", function () {
-    if (scaleLevel > 1) {
-        scaleLevel = scaleLevel - 0.1;
-        videoElem.style.transform = `scale(${scaleLevel})`;
-    }
-})
-plusBtn.addEventListener("click", function () {
-    if (scaleLevel < 1.7) {
-        scaleLevel = scaleLevel + 0.1;
-        videoElem.style.transform = `scale(${scaleLevel})`;
-    }
-})
+let captureBtn = document.querySelector("#click-picture");
+captureBtn.addEventListener("click", function () {
+  let innerDiv = captureBtn.querySelector("#click-div");
+  innerDiv.classList.add("capture-animation");
+  capture(filter);
+  setTimeout(function () {
+    innerDiv.classList.remove("capture-animation");
+  }, 1000);
+});
+
+vidRecordBtn.addEventListener("click", function () {
+  removeFilter();
+  let innerDiv = vidRecordBtn.querySelector("#record-div");
+  if (!recordState) {
+    recordState = true;
+    innerDiv.classList.add("recording-animation");
+    currZoom = 1;
+    videoPlayer.style.transform = `scale(${currZoom})`;
+    mediaRecorder.start();
+  } else {
+    recordState = false;
+    innerDiv.classList.remove("recording-animation");
+    mediaRecorder.stop();
+  }
+});
+
+navigator.mediaDevices.getUserMedia(constraints).then(function (mediaStream) {
+  videoPlayer.srcObject = mediaStream;
+
+  mediaRecorder = new MediaRecorder(mediaStream);
+
+  mediaRecorder.ondataavailable = function (e) {
+    chunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = function () {
+    let blob = new Blob(chunks, { type: "video/mp4" });
+    chunks = [];
+    // C4.2
+    addMediaToGallery(blob, "video");
+  };
+});
+
+function capture(filter) {
+  let c = document.createElement("canvas");
+  c.width = videoPlayer.videoWidth;
+  c.height = videoPlayer.videoHeight;
+  let ctx = c.getContext("2d");
+
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.scale(currZoom, currZoom);
+  ctx.translate(-c.width / 2, -c.height / 2);
+  ctx.drawImage(videoPlayer, 0, 0);
+  if (filter !== "") {
+    ctx.fillStyle = filter;
+    ctx.fillRect(0, 0, c.width, c.height);
+  }
+
+  addMediaToGallery(c.toDataURL(), "img");
+}
+
+function addFilterToScreen(filterColor) {
+  let filter = document.createElement("div");
+  filter.classList.add("on-screen-filter");
+  filter.style.height = "100vh";
+  filter.style.width = "100vw";
+  filter.style.position = "fixed";
+  filter.style.top = "0px";
+  filter.style.background = `${filterColor}`;
+  document.querySelector("body").appendChild(filter);
+}
+
+function removeFilter() {
+  let OnScreenfilter = document.querySelector(".on-screen-filter");
+  if (OnScreenfilter) OnScreenfilter.remove();
+}
